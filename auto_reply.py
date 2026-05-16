@@ -67,8 +67,7 @@ def get_auto_reply(sender_email, sender_name):
             template = f.read()
             
         return template.replace("{{first_name}}", first_name) \
-                       .replace("{{company}}", company) \
-                       .replace("{{meeting_link}}", "https://calendly.com/yourname")
+                       .replace("{{company}}", company)
     except Exception as e:
         print(f"Error building auto-reply: {e}")
         return f"Hi {sender_name},\n\nThank you for your reply. I will get back to you soon."
