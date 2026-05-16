@@ -16,55 +16,65 @@ load_dotenv("config/.env")
 
 class CEOScraper:
     def __init__(self):
-        self.wiki_url = "https://en.wikipedia.org/wiki/List_of_largest_companies_by_revenue"
+        self.wiki_urls = [
+            "https://en.wikipedia.org/wiki/List_of_largest_companies_by_revenue",
+            "https://en.wikipedia.org/wiki/Fortune_Global_500"
+        ]
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
         self.hunter_api_key = os.getenv("HUNTER_API_KEY")
 
-    def scrape_main_list(self, limit=50):
-        """Scrapes the main list from Wikipedia (Revenue, Company, Industry, Country)."""
-        print(f"Scraping main company list from Wikipedia...")
-        response = requests.get(self.wiki_url, headers=self.headers)
-        if response.status_code != 200:
-            print(f"Failed to fetch Wikipedia: {response.status_code}")
-            return []
-
-        soup = BeautifulSoup(response.content, 'html.parser')
-        tables = soup.find_all('table', {'class': 'wikitable'})
-        
-        if not tables:
-            return []
-
+    def scrape_main_list(self, limit=100):
+        """Scrapes companies from multiple Wikipedia sources until limit is reached."""
         ceo_data = []
-        for table in tables:
-            rows = table.find_all('tr')[1:]
-            for row in rows:
-                if len(ceo_data) >= limit:
-                    break
-                cols = row.find_all(['td', 'th'])
-                if len(cols) >= 5:
-                    try:
-                        # Clean company name (remove [1] etc)
-                        company = DataCleaner.clean_text(cols[1].text)
-                        industry = DataCleaner.clean_text(cols[2].text)
-                        revenue = DataCleaner.clean_text(cols[3].text)
-                        country = DataCleaner.clean_text(cols[5].text) if len(cols) > 5 else "Global"
-                        
-                        ceo_data.append({
-                            "Full Name": "Pending Search",
-                            "Company Name": company,
-                            "Industry": industry,
-                            "Country": country,
-                            "Email Address": "Contact Pending",
-                            "Mobile / Contact": "N/A",
-                            "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={company}%20CEO",
-                            "Net Worth (USD)": "Billionaire Status",
-                            "Company Revenue": revenue,
-                            "Data Source URL": self.wiki_url
-                        })
-                    except Exception as e:
-                        print(f"Error parsing row: {e}")
+        seen_companies = set()
+
+        for url in self.wiki_urls:
+            print(f"Scraping from: {url}...")
+            try:
+                response = requests.get(url, headers=self.headers)
+                if response.status_code != 200:
+                    continue
+
+                soup = BeautifulSoup(response.content, 'html.parser')
+                tables = soup.find_all('table', {'class': 'wikitable'})
+                
+                for table in tables:
+                    rows = table.find_all('tr')[1:]
+                    for row in rows:
+                        if len(ceo_data) >= limit:
+                            break
+                        cols = row.find_all(['td', 'th'])
+                        if len(cols) >= 5:
+                            try:
+                                company = DataCleaner.clean_text(cols[1].text)
+                                if company in seen_companies or not company:
+                                    continue
+                                
+                                industry = DataCleaner.clean_text(cols[2].text)
+                                revenue = DataCleaner.clean_text(cols[3].text)
+                                country = DataCleaner.clean_text(cols[5].text) if len(cols) > 5 else "Global"
+                                
+                                ceo_data.append({
+                                    "Full Name": "Pending Search",
+                                    "Company Name": company,
+                                    "Industry": industry,
+                                    "Country": country,
+                                    "Email Address": "Contact Pending",
+                                    "Mobile / Contact": "N/A",
+                                    "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={company}%20CEO",
+                                    "Net Worth (USD)": "Billionaire Status",
+                                    "Company Revenue": revenue,
+                                    "Data Source URL": url
+                                })
+                                seen_companies.add(company)
+                            except:
+                                continue
+                    if len(ceo_data) >= limit:
+                        break
+            except:
+                continue
             if len(ceo_data) >= limit:
                 break
 
@@ -76,10 +86,34 @@ class CEOScraper:
         mapping = {
             "Walmart": "Doug McMillon",
             "Amazon": "Andy Jassy",
+            "State Grid": "Zhang Zhigang",
+            "Saudi Aramco": "Amin H. Nasser",
+            "Sinopec": "Ma Yongsheng",
+            "China National Petroleum": "Hou Qijun",
             "Apple": "Tim Cook",
+            "UnitedHealth": "Andrew Witty",
+            "Berkshire Hathaway": "Warren Buffett",
+            "CVS Health": "Karen S. Lynch",
+            "ExxonMobil": "Darren Woods",
+            "Volkswagen": "Oliver Blume",
+            "Shell": "Wael Sawan",
+            "TotalEnergies": "Patrick Pouyanné",
+            "Glencore": "Gary Nagle",
+            "BP": "Murray Auchincloss",
             "Microsoft": "Satya Nadella",
             "Alphabet": "Sundar Pichai",
-            "Tesla": "Elon Musk"
+            "Tesla": "Elon Musk",
+            "Meta": "Mark Zuckerberg",
+            "Costco": "Ron Vachris",
+            "Stellantis": "Carlos Tavares",
+            "Chevron": "Michael Wirth",
+            "Cigna": "David Cordani",
+            "Ford": "Jim Farley",
+            "Home Depot": "Ted Decker",
+            "JPMorgan Chase": "Jamie Dimon",
+            "General Motors": "Mary Barra",
+            "Toyota": "Koji Sato",
+            "Samsung": "Han Jong-hee"
         }
         for key, val in mapping.items():
             if key.lower() in company_name.lower():

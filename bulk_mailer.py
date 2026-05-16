@@ -1,150 +1,92 @@
 import smtplib
 import time
 import os
-import hashlib
+import pandas as pd
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
-import pandas as pd
 
+# Load configuration from environment
 load_dotenv("config/.env")
 
-class EmailSender:
-    def __init__(self):
-        self.host = os.getenv("SMTP_HOST", "smtp.sendgrid.net")
-        self.port = int(os.getenv("SMTP_PORT", 587))
-        self.user = os.getenv("SMTP_USER")
-        self.password = os.getenv("SMTP_PASS")
+# SMTP Configuration (Matches 2.3 Skeleton)
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.sendgrid.net")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER", "apikey")
+SMTP_PASS = os.getenv("SMTP_PASS", "YOUR_SENDGRID_API_KEY")
+REPLY_TO = os.getenv("REPLY_TO", "replies@yourdomain.com")
+FROM_NAME = os.getenv("FROM_NAME", "John Smith")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "outreach@yourdomain.com")
+
+def send_email(to_email, first_name, company, industry="your industry"):
+    """
+    Sends a personalized email using the HTML template.
+    Matches the function signature in the 2.3 skeleton.
+    """
+    msg = MIMEMultipart("alternative")
+    msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
+    msg["To"] = to_email
+    msg["Reply-To"] = REPLY_TO
+    msg["Subject"] = f"Quick question for you, {first_name}"
+
+    try:
+        # Load template (Matches 2.3 logic)
+        with open("template.html", "r") as f:
+            body = f.read()
         
-        self.from_name = os.getenv("FROM_NAME", "John from Bitlance")
-        self.from_email = os.getenv("FROM_EMAIL", "outreach@yourdomain.com")
-        self.reply_to = os.getenv("REPLY_TO", "replies@yourdomain.com")
+        # Personalization
+        body = body.replace("{{first_name}}", first_name)
+        body = body.replace("{{company}}", company)
+        body = body.replace("{{industry}}", industry)
+        body = body.replace("{{unsubscribe_link}}", f"https://bitlance.ai/unsubscribe?email={to_email}")
         
-        self.template_path = "template.html"
+        # Attach HTML content
+        msg.attach(MIMEText(body, "html"))
 
-    def _get_template(self):
-        """Load the HTML template or return a default fallback."""
-        if os.path.exists(self.template_path):
-            with open(self.template_path, 'r') as f:
-                return f.read()
-        return "Hi {{first_name}}, I'm reaching out from {{company}}."
-
-    def _generate_plain_text(self, first_name, company, industry):
-        """Create a plain-text version for better email deliverability (anti-spam)."""
-        return f"""
-Hi {first_name},
-
-I'm reaching out because of your impressive work at {company} in the {industry} sector.
-
-I have a quick question regarding your current growth strategy. Would you be open to a brief chat?
-
-Best regards,
-{self.from_name}
-"""
-
-    def send_bulk_email(self, recipient_data):
-        """
-        recipient_data: list of dicts with {email, first_name, company, industry}
-        """
-        print(f"🚀 Starting bulk email campaign for {len(recipient_data)} recipients...")
-        
-        sent_count = 0
-        failed_count = 0
-        
-        try:
-            # Using context manager for SMTP connection to handle login once if possible, 
-            # though some providers prefer fresh connections for long batches.
-            # For 50 emails/hour, we can reconnect or stay open.
-            server = smtplib.SMTP(self.host, self.port)
+        # SMTP Connection and Send
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
-            if self.user and self.password:
-                server.login(self.user, self.password)
-            
-            template = self._get_template()
-
-            for i, data in enumerate(recipient_data):
-                try:
-                    to_email = data['email']
-                    first_name = data['first_name']
-                    company = data['company']
-                    industry = data.get('industry', 'your industry')
-                    
-                    msg = MIMEMultipart("alternative")
-                    msg["From"] = f"{self.from_name} <{self.from_email}>"
-                    msg["To"] = to_email
-                    msg["Reply-To"] = self.reply_to
-                    msg["Subject"] = f"Quick question for you, {first_name}"
-                    
-                    # Generate email hash for tracking pixel
-                    email_hash = hashlib.md5(to_email.encode()).hexdigest()
-                    
-                    # Personalize Body
-                    body_html = template.replace("{{first_name}}", first_name)
-                    body_html = body_html.replace("{{company}}", company)
-                    body_html = body_html.replace("{{industry}}", industry)
-                    body_html = body_html.replace("{{email_hash}}", email_hash)
-                    body_html = body_html.replace("{{unsubscribe_link}}", f"https://bitlance.ai/unsubscribe?id={email_hash}")
-                    
-                    body_text = self._generate_plain_text(first_name, company, industry)
-                    
-                    # Attach both versions (Alternative) for maximum compatibility
-                    msg.attach(MIMEText(body_text, "plain"))
-                    msg.attach(MIMEText(body_html, "html"))
-                    
-                    server.sendmail(self.from_email, to_email, msg.as_string())
-                    
-                    sent_count += 1
-                    print(f"[{i+1}/{len(recipient_data)}] ✓ Sent to {first_name} ({to_email})")
-                    
-                    # Rate Limiting: Max 50 emails/hour -> 3600/50 = 72 seconds delay
-                    if i < len(recipient_data) - 1:
-                        print(f"Sleeping for 72s to respect rate limits...")
-                        time.sleep(72) 
-                        
-                except Exception as e:
-                    print(f"❌ Failed to send to {data.get('email')}: {e}")
-                    failed_count += 1
-            
-            server.quit()
-            
-        except Exception as e:
-            print(f"⛔ SMTP Connection Error: {e}")
-            return False
-
-        print(f"\n📊 Campaign Complete. Sent: {sent_count} | Failed: {failed_count}")
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(msg["From"], to_email, msg.as_string())
+        
         return True
+    except Exception as e:
+        print(f"❌ Failed to send to {to_email}: {e}")
+        return False
 
 if __name__ == "__main__":
-    print("📧 Running Bulk Mailer deliverable...")
+    print("📧 Module 2: Starting Bulk Mailer Execution...")
     
-    # 1. Load data
+    # 1. Load Data (Matches 2.3 Skeleton)
     try:
-        df_ready = pd.read_excel("ceo_data.xlsx", sheet_name="Email Ready")
+        df = pd.read_excel("ceo_data.xlsx", sheet_name="Email Ready")
     except Exception as e:
-        print(f"❌ Error loading 'Email Ready' sheet: {e}. Run scraper.py first.")
+        print(f"❌ Error loading Excel: {e}")
         exit(1)
 
-    if df_ready.empty:
-        print("⚠️ No valid emails found. Run scraper.py first.")
-        exit(1)
+    sent, failed = [], []
 
-    # 2. Prepare recipients
-    recipients = []
-    for _, row in df_ready.iterrows():
-        full_name = str(row["Full Name"])
-        first_name = full_name.split()[0] if full_name != "N/A" else "there"
-        recipients.append({
-            "email": row["Email Address"],
-            "first_name": first_name,
-            "company": row["Company Name"],
-            "industry": row["Industry"]
-        })
+    # 2. Iterate and Send (Matches 2.3 Loop)
+    for _, row in df.iterrows():
+        try:
+            # Extract first name and company
+            first_name = str(row["Full Name"]).split()[0]
+            company = str(row["Company Name"])
+            to_email = str(row["Email Address"])
+            industry = str(row.get("Industry", "your industry"))
 
-    # 3. Trigger
-    sender = EmailSender()
-    confirm = input(f"Proceed to send {len(recipients)} emails? (y/n): ")
-    if confirm.lower() == 'y':
-        sender.send_bulk_email(recipients[:5]) # Demo limit
-        print("\n✅ Campaign execution finished.")
-    else:
-        print("Campaign aborted.")
+            # Send personalized email
+            if send_email(to_email, first_name, company, industry):
+                sent.append(to_email)
+                print(f"✓ Sent to {row['Full Name']} <{to_email}>")
+            else:
+                failed.append({"email": to_email, "error": "SMTP Error"})
+                
+        except Exception as e:
+            failed.append({"email": row.get("Email Address", "Unknown"), "error": str(e)})
+            print(f"❌ Error processing row: {e}")
+
+        # Rate Limiting (Matches 2.3 requirement: ~50 emails/hour)
+        time.sleep(72)
+
+    print(f"\nDone. Sent: {len(sent)} | Failed: {len(failed)}")
