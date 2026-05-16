@@ -113,3 +113,44 @@ class ExcelManager:
         if os.path.exists(self.file_path):
             return pd.read_excel(self.file_path)
         return None
+
+    def log_reply(self, timestamp, sender_name, sender_email, subject, reply_text):
+        """Append a reply record to 'Replies Log' sheet."""
+        try:
+            from openpyxl import load_workbook
+            
+            if not os.path.exists(self.file_path):
+                wb = Workbook()
+                wb.save(self.file_path)
+            
+            wb = load_workbook(self.file_path)
+            sheet_name = "Replies Log"
+            
+            if sheet_name not in wb.sheetnames:
+                ws = wb.create_sheet(sheet_name)
+                # Header with styling
+                ws.append(["Timestamp", "Sender Name", "Sender Email", "Subject", "Reply Text", "Status"])
+                for cell in ws[1]:
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+            else:
+                ws = wb[sheet_name]
+            
+            ws.append([timestamp, sender_name, sender_email, subject, reply_text, "Replied"])
+            
+            # Auto-adjust column width for the new sheet
+            for col in ws.columns:
+                max_length = 0
+                column = col[0].column_letter
+                for cell in col:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except: pass
+                ws.column_dimensions[column].width = min(max_length + 2, 60)
+
+            wb.save(self.file_path)
+            return True
+        except Exception as e:
+            print(f"❌ Error logging reply to Excel: {e}")
+            return False
