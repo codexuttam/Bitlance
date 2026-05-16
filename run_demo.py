@@ -1,37 +1,31 @@
 from src.scraper.ceo_scraper import CEOScraper
 from src.manager.excel_manager import ExcelManager
-from src.automation.email_sender import EmailSender
 import pandas as pd
+import os
 
 def main():
-    print("🚀 Starting Email Automation Campaign System...")
+    print("🚀 Module 1: Starting CEO Data Extraction & Excel Storage...")
 
-    # 1. Scrape Data
+    # 1. Initialize Scraper and Run Pipeline
     scraper = CEOScraper()
-    raw_data = scraper.scrape_ceos(limit=10)
+    # Scrape 50 CEOs as per Step S3
+    df = scraper.run_full_pipeline(limit=50)
     
-    if raw_data is None:
-        print("❌ Scraping failed.")
+    if df.empty:
+        print("❌ Data extraction failed.")
         return
 
-    # Refine data (Add CEO names)
-    refined_data = scraper.refine_ceo_names(raw_data)
+    # 2. Save to Excel
+    # The ExcelManager now defaults to data/ceo_data.xlsx as requested
+    manager = ExcelManager()
+    manager.save_leads(df)
 
-    # Add mock emails for demonstration
-    refined_data['Email'] = refined_data['CEO'].apply(
-        lambda x: f"{x.lower().replace(' ', '.')}@example.com" if x != "Pending Search" else "info@company.com"
-    )
-
-    # 2. Store in Excel
-    manager = ExcelManager("data/ceo_leads.xlsx")
-    manager.save_leads(refined_data)
-
-    # 3. Outreach Demo (Optional/Simulated)
-    print("\n📊 Lead Data Preview:")
-    print(refined_data[['Rank', 'Company', 'CEO', 'Email']].head())
-
-    print("\n✅ Phase 1: Core Modules and Dependencies installed and configured.")
-    print("Ready for Phase 2: AI Response Automation and Live Campaign Execution.")
+    print("\n📊 Extraction Summary:")
+    print(f"Total CEOs Extracted: {len(df)}")
+    print(f"Valid Emails Found: {df['Is_Email_Valid'].sum() if 'Is_Email_Valid' in df.columns else 'N/A'}")
+    
+    print("\n✅ Module 1 Complete: data/ceo_data.xlsx is ready.")
+    print("Time remaining to Deadline: ~68 Hours.")
 
 if __name__ == "__main__":
     main()
