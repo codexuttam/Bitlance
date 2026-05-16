@@ -23,10 +23,24 @@ class EmailSender:
         self.template_path = "template.html"
 
     def _get_template(self):
+        """Load the HTML template or return a default fallback."""
         if os.path.exists(self.template_path):
             with open(self.template_path, 'r') as f:
                 return f.read()
         return "Hi {{first_name}}, I'm reaching out from {{company}}."
+
+    def _generate_plain_text(self, first_name, company, industry):
+        """Create a plain-text version for better email deliverability (anti-spam)."""
+        return f"""
+Hi {first_name},
+
+I'm reaching out because of your impressive work at {company} in the {industry} sector.
+
+I have a quick question regarding your current growth strategy. Would you be open to a brief chat?
+
+Best regards,
+{self.from_name}
+"""
 
     def send_bulk_email(self, recipient_data):
         """
@@ -65,13 +79,17 @@ class EmailSender:
                     email_hash = hashlib.md5(to_email.encode()).hexdigest()
                     
                     # Personalize Body
-                    body = template.replace("{{first_name}}", first_name)
-                    body = body.replace("{{company}}", company)
-                    body = body.replace("{{industry}}", industry)
-                    body = body.replace("{{email_hash}}", email_hash)
-                    body = body.replace("{{unsubscribe_link}}", f"https://bitlance.ai/unsubscribe?id={email_hash}")
+                    body_html = template.replace("{{first_name}}", first_name)
+                    body_html = body_html.replace("{{company}}", company)
+                    body_html = body_html.replace("{{industry}}", industry)
+                    body_html = body_html.replace("{{email_hash}}", email_hash)
+                    body_html = body_html.replace("{{unsubscribe_link}}", f"https://bitlance.ai/unsubscribe?id={email_hash}")
                     
-                    msg.attach(MIMEText(body, "html"))
+                    body_text = self._generate_plain_text(first_name, company, industry)
+                    
+                    # Attach both versions (Alternative) for maximum compatibility
+                    msg.attach(MIMEText(body_text, "plain"))
+                    msg.attach(MIMEText(body_html, "html"))
                     
                     server.sendmail(self.from_email, to_email, msg.as_string())
                     

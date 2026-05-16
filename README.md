@@ -98,6 +98,15 @@ Bitlance/
 - [x] **auto_reply.py**: IMAP-based auto-reply listener.
 - [x] **auto_reply_template.txt**: Personalized plain-text acknowledgement template.
 - [x] **README.md**: Complete setup and execution documentation.
+- [x] **Bonus — No-Code Workflow**: Blueprint for n8n/Zapier alternative ([`n8n_workflow_blueprint.json`](n8n_workflow_blueprint.json)).
+
+---
+
+## 🎁 Bonus: No-Code Alternative (n8n)
+For teams preferring a no-code approach, a blueprint is provided in `n8n_workflow_blueprint.json`. This workflow:
+1. **Triggers** on new unread emails in Gmail.
+2. **Looks up** the sender in a Google Sheets version of `ceo_data.xlsx`.
+3. **Dispatches** a personalized reply automatically.
 
 ---
 
