@@ -26,38 +26,42 @@ class CEOScraper:
             return []
 
         soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table', {'class': 'wikitable'})
+        tables = soup.find_all('table', {'class': 'wikitable'})
         
-        if not table:
+        if not tables:
             return []
 
-        rows = table.find_all('tr')[1:]
         ceo_data = []
-
-        for row in rows[:limit]:
-            cols = row.find_all(['td', 'th'])
-            if len(cols) >= 5:
-                try:
-                    company = cols[1].text.strip()
-                    industry = cols[2].text.strip()
-                    revenue = cols[3].text.strip()
-                    country = cols[5].text.strip() if len(cols) > 5 else "Global"
-                    
-                    # Store with field names from requirements
-                    ceo_data.append({
-                        "Full Name": "Pending Search",
-                        "Company Name": company,
-                        "Industry": industry,
-                        "Country": country,
-                        "Email Address": "Contact Pending",
-                        "Mobile / Contact": "N/A",
-                        "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={company}%20CEO",
-                        "Net Worth (USD)": "See Forbes",
-                        "Company Revenue": revenue,
-                        "Data Source URL": self.wiki_url
-                    })
-                except Exception as e:
-                    print(f"Error parsing row: {e}")
+        for table in tables:
+            rows = table.find_all('tr')[1:]
+            for row in rows:
+                if len(ceo_data) >= limit:
+                    break
+                cols = row.find_all(['td', 'th'])
+                if len(cols) >= 5:
+                    try:
+                        # Clean company name (remove [1] etc)
+                        company = DataCleaner.clean_text(cols[1].text)
+                        industry = DataCleaner.clean_text(cols[2].text)
+                        revenue = DataCleaner.clean_text(cols[3].text)
+                        country = DataCleaner.clean_text(cols[5].text) if len(cols) > 5 else "Global"
+                        
+                        ceo_data.append({
+                            "Full Name": "Pending Search",
+                            "Company Name": company,
+                            "Industry": industry,
+                            "Country": country,
+                            "Email Address": "Contact Pending",
+                            "Mobile / Contact": "N/A",
+                            "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={company}%20CEO",
+                            "Net Worth (USD)": "Billionaire Status",
+                            "Company Revenue": revenue,
+                            "Data Source URL": self.wiki_url
+                        })
+                    except Exception as e:
+                        print(f"Error parsing row: {e}")
+            if len(ceo_data) >= limit:
+                break
 
         return ceo_data
 
@@ -109,7 +113,7 @@ class CEOScraper:
             pass
         return "Search Failed"
 
-    def run_full_pipeline(self, limit=50):
+    def run_full_pipeline(self, limit=100):
         data_list = self.scrape_main_list(limit)
         
         print(f"Enriching {len(data_list)} CEO profiles...")
