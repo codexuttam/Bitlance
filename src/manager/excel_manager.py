@@ -6,9 +6,11 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import CellIsRule
 
 class ExcelManager:
-    def __init__(self, file_path="data/ceo_data.xlsx"):
+    def __init__(self, file_path="ceo_data.xlsx"):
         self.file_path = file_path
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        dir_name = os.path.dirname(self.file_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
 
     def _parse_revenue(self, rev_str):
         """Helper to convert revenue string to float for sorting."""

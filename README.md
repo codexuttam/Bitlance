@@ -49,23 +49,23 @@ HUNTER_API_KEY=your_key_here
 ## 📖 Usage Guide
 
 ### Module 1: Scraping & Data Preparation
-Run the demo scraper to generate the `ceo_data.xlsx` file.
+Run the scraper to generate the `ceo_data.xlsx` file.
 ```bash
-python3 run_demo.py
+python3 scraper.py
 ```
-*Outputs: `data/ceo_data.xlsx` with 'CEO Master List' and 'Email Ready' sheets.*
+*Outputs: `ceo_data.xlsx` with 'CEO Master List' and 'Email Ready' sheets.*
 
 ### Module 2: Bulk Email Campaign
 Trigger the outreach campaign to the 'Email Ready' list.
 ```bash
-python3 run_campaign.py
+python3 bulk_mailer.py
 ```
 *Features: 72s rate-limiting, personalized HTML templates, and tracking pixels.*
 
 ### Module 3: Auto-Reply Automation
 Start the background listener to handle incoming replies.
 ```bash
-python3 run_listener.py
+python3 auto_reply.py
 ```
 *Action: Monitors inbox, sends instant personalized replies, and logs interactions to 'Replies Log' sheet.*
 

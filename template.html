@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { padding: 20px; }
+        .footer { margin-top: 30px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; }
+        .unsubscribe { color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p>Hi {{first_name}},</p>
+        
+        <p>I came across your work at <strong>{{company}}</strong> and was genuinely impressed by your leadership in the {{industry}} space.</p>
+        
+        <p>I wanted to reach out personally to explore a potential collaboration that I believe could add significant value to {{company}}'s current growth trajectory.</p>
+        
+        <p>Would you be open to a brief 15-minute call this week?</p>
+        
+        <p>Best regards,<br>
+        <strong>John Smith</strong><br>
+        Lead Strategist | Bitlance<br>
+        +1-555-0123 | <a href="https://bitlance.ai">bitlance.ai</a></p>
+        
+        <!-- Tracking Pixel (Mock) -->
+        <img src="https://track.bitlance.ai/pixel.png?email={{email_hash}}" width="1" height="1" style="display:none;" />
+    </div>
+    
+    <div class="footer">
+        To unsubscribe, click here: <a href="{{unsubscribe_link}}" class="unsubscribe">Unsubscribe</a>
+        <br>Bitlance HQ, 123 Automation Way, Tech City.
+    </div>
+</body>
+</html>
