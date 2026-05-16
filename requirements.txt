@@ -1,0 +1,10 @@
+pandas
+openpyxl
+requests
+beautifulsoup4
+playwright
+python-dotenv
+yagmail
+imapclient
+google-generativeai
+python-docx
