@@ -81,9 +81,9 @@ Bitlance/
 │   ├── scraper/          # Module 1: Wikipedia scraper & cleaners
 │   ├── automation/       # Module 2 & 3: Email sender and listener
 │   └── manager/          # Excel utility manager
-├── run_demo.py           # Module 1 Runner
-├── run_campaign.py       # Module 2 Runner
-├── run_listener.py       # Module 3 Runner
+├── scraper.py            # Module 1 Runner
+├── bulk_mailer.py        # Module 2 Runner
+├── auto_reply.py         # Module 3 Runner
 └── requirements.txt      # Dependency list
 ```
 

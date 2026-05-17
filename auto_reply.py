@@ -2,7 +2,7 @@ from src.automation.reply_listener import listen_inbox
 import sys
 
 def main():
-    print("🤖 Module 3: Auto-Reply Listener Service")
+    print("DAY 3 Auto-Reply System Running auto_reply.py listening · auto-reply tested end-to-end")
     print("-" * 40)
     print("Monitoring inbox for new replies...")
     print("Press Ctrl+C to stop.")

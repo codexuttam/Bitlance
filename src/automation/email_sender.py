@@ -19,7 +19,7 @@ class EmailSender:
         self.from_email = os.getenv("FROM_EMAIL", "outreach@yourdomain.com")
         self.reply_to = os.getenv("REPLY_TO", "replies@yourdomain.com")
         
-        self.template_path = "src/automation/template.html"
+        self.template_path = "template.html"
 
     def _get_template(self):
         if os.path.exists(self.template_path):

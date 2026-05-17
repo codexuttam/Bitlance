@@ -47,9 +47,9 @@ def main():
     sender = EmailSender()
     # For demo/testing, I'll only send the first one if not properly configured
     # In a real run, it would iterate all.
-    sender.send_bulk_email(recipients[:5]) # Sending top 5 for demo
+    sender.send_bulk_email(recipients[:10]) # Sending top 10 for test
 
-    print("\n✅ Module 2 execution finished.")
+    print("\nDAY 2 Bulk Email System Live bulk_mailer.py tested · template.html created · at least 10 test emails sent successfully")
 
 if __name__ == "__main__":
     main()

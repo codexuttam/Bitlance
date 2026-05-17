@@ -25,7 +25,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CEO_DATA_PATH = os.path.join(BASE_DIR, "data", "ceo_data.xlsx")
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "auto_reply_template.txt")
+TEMPLATE_PATH = os.path.join(BASE_DIR, "auto_reply_template.txt")
 
 def decode_str(s):
     if s is None:

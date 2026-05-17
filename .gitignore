@@ -10,9 +10,3 @@ node_modules/
 dist/
 build/
 *.log
-auto_reply_template.txt
-
-
-
-
-
