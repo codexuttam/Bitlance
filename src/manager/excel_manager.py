@@ -6,7 +6,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import CellIsRule
 
 class ExcelManager:
-    def __init__(self, file_path="ceo_data.xlsx"):
+    def __init__(self, file_path="data/ceo_data.xlsx"):
         self.file_path = file_path
         dir_name = os.path.dirname(self.file_path)
         if dir_name:
