@@ -171,16 +171,65 @@ class CEOScraper:
         except Exception as e:
             return base_url
 
-    def run_full_pipeline(self, limit=100):
-        data_list = self.scrape_main_list(limit)
+    def scrape_forbes_api(self, limit=100):
+        """Fetches live, real-world data from Forbes' hidden JSON API endpoint."""
+        print("Scraping live data from Forbes API...")
+        url = "https://www.forbes.com/forbesapi/person/forbes-400/2023/position/true.json"
+        
+        try:
+            response = requests.get(url, headers=self.headers)
+            if response.status_code != 200:
+                print("Forbes API rejected the request.")
+                return []
+                
+            data = response.json()
+            persons = data.get('personList', {}).get('personsLists', [])
+            
+            ceo_data = []
+            for p in persons[:limit]:
+                # Extract and format Forbes data
+                name = p.get('personName', 'Unknown')
+                company = str(p.get('source', 'Unknown')).split(',')[0] # Get primary company
+                industries = p.get('industries', ['Unknown'])
+                industry = industries[0] if industries else 'Unknown'
+                country = p.get('countryOfCitizenship', 'Global')
+                net_worth_raw = p.get('finalWorth', 0)
+                net_worth = f"${net_worth_raw / 1000:.1f} Billion" if net_worth_raw else "Unknown"
+                uri = p.get('uri', '')
+                
+                ceo_data.append({
+                    "Full Name": DataCleaner.clean_text(name),
+                    "Company Name": DataCleaner.clean_text(company),
+                    "Industry": DataCleaner.clean_text(industry),
+                    "Country": DataCleaner.clean_text(country),
+                    "Email Address": "Contact Pending",
+                    "Mobile / Contact": "N/A",
+                    "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={name}%20{company}",
+                    "Net Worth (USD)": net_worth,
+                    "Company Revenue": "N/A (Forbes List)",
+                    "Data Source URL": f"https://www.forbes.com/profile/{uri}/" if uri else url,
+                    "Company Wiki URL": None # Not needed for Forbes since we have the name
+                })
+                
+            return ceo_data
+        except Exception as e:
+            print(f"Error scraping Forbes API: {e}")
+            return []
+
+    def run_full_pipeline(self, limit=100, use_forbes=False):
+        if use_forbes:
+            data_list = self.scrape_forbes_api(limit)
+        else:
+            data_list = self.scrape_main_list(limit)
         
         print(f"Enriching {len(data_list)} CEO profiles...")
         for entry in data_list:
-            # 1. Find CEO Name in real-time
-            entry["Full Name"] = self.find_ceo_name(entry["Company Name"], entry.get("Company Wiki URL"))
+            # 1. Find CEO Name in real-time (Skip if using Forbes, since we already have the name)
+            if not use_forbes or entry["Full Name"] == "Pending Search":
+                entry["Full Name"] = self.find_ceo_name(entry["Company Name"], entry.get("Company Wiki URL"))
             
             # 2. Find Email
-            if entry["Full Name"] != "Unknown CEO":
+            if entry["Full Name"] != "Unknown CEO" and entry["Full Name"] != "Unknown":
                 entry["Email Address"] = self.get_email_via_hunter(entry["Full Name"], entry["Company Name"])
             
             # 3. Add placeholders for other fields as requested
