@@ -46,6 +46,9 @@ class CEOScraper:
                         revenue = DataCleaner.clean_text(cols[3].text)
                         country = DataCleaner.clean_text(cols[5].text) if len(cols) > 5 else "Global"
                         
+                        company_tag = cols[1].find('a')
+                        company_wiki_url = "https://en.wikipedia.org" + company_tag['href'] if company_tag else None
+                        
                         ceo_data.append({
                             "Full Name": "Pending Search",
                             "Company Name": company,
@@ -56,7 +59,8 @@ class CEOScraper:
                             "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={company}%20CEO",
                             "Net Worth (USD)": "Billionaire Status",
                             "Company Revenue": revenue,
-                            "Data Source URL": self.wiki_url
+                            "Data Source URL": self.wiki_url,
+                            "Company Wiki URL": company_wiki_url
                         })
                     except Exception as e:
                         print(f"Error parsing row: {e}")
@@ -65,41 +69,45 @@ class CEOScraper:
 
         return ceo_data
 
-    def find_ceo_name(self, company_name):
-        """Attempt to find CEO name via a quick search or linked page."""
-        # For the demo, we'll use a mapping for the top companies
-        # In production, we'd use a search API or scrape the company's Wiki page
-        mapping = {
-            "Walmart": "Doug McMillon",
-            "Amazon": "Andy Jassy",
-            "State Grid": "Zhang Zhigang",
-            "Saudi Aramco": "Amin H. Nasser",
-            "Sinopec": "Ma Yongsheng",
-            "China National Petroleum": "Hou Qijun",
-            "Apple": "Tim Cook",
-            "UnitedHealth": "Andrew Witty",
-            "Berkshire Hathaway": "Warren Buffett",
-            "CVS Health": "Karen S. Lynch",
-            "ExxonMobil": "Darren Woods",
-            "Volkswagen": "Oliver Blume",
-            "Shell": "Wael Sawan",
-            "TotalEnergies": "Patrick Pouyanné",
-            "Glencore": "Gary Nagle",
-            "BP": "Murray Auchincloss",
-            "Microsoft": "Satya Nadella",
-            "Alphabet": "Sundar Pichai",
-            "Tesla": "Elon Musk",
-            "Meta": "Mark Zuckerberg"
-        }
-        for key, val in mapping.items():
-            if key.lower() in company_name.lower():
-                return val
+    def find_ceo_name(self, company_name, company_wiki_url=None):
+        """Scrape the CEO name directly from the company's Wikipedia page in real-time."""
+        if not company_wiki_url:
+            return "Unknown CEO"
+            
+        try:
+            time.sleep(0.5)  # Be polite to Wikipedia to avoid rate limits
+            response = requests.get(company_wiki_url, headers=self.headers)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                infobox = soup.find('table', {'class': re.compile(r'infobox')})
+                if infobox:
+                    for tr in infobox.find_all('tr'):
+                        th = tr.find('th', {'class': 'infobox-label'}) or tr.find('th')
+                        if th and 'Key people' in th.text:
+                            td = tr.find('td', {'class': 'infobox-data'}) or tr.find('td')
+                            if td:
+                                # Extract items (can be separated by <br>, <li>, etc)
+                                text = td.get_text(separator='|', strip=True)
+                                people = text.split('|')
+                                
+                                for person in people:
+                                    if 'CEO' in person or 'chief executive' in person.lower() or 'chairman' in person.lower():
+                                        name = person.split('(')[0].split(',')[0].strip()
+                                        return DataCleaner.clean_text(name)
+                                
+                                # If no explicit title, return the first person
+                                if people:
+                                    name = people[0].split('(')[0].split(',')[0].strip()
+                                    return DataCleaner.clean_text(name)
+        except Exception as e:
+            print(f"Error scraping CEO for {company_name}: {e}")
         return "Unknown CEO"
 
     def get_email_via_hunter(self, full_name, company_name):
         """Integration with Hunter.io API."""
         if not self.hunter_api_key or "your_hunter" in self.hunter_api_key:
-            return f"{full_name.lower().replace(' ', '.')}@corporate.com" # Mock
+            # Fallback to programmatic pattern generation if API key is missing
+            return f"{full_name.lower().replace(' ', '.')}@corporate.com"
 
         domain = company_name.lower().replace(" ", "").replace(".", "") + ".com"
         url = f"https://api.hunter.io/v2/email-finder?domain={domain}&fullname={full_name}&api_key={self.hunter_api_key}"
@@ -118,8 +126,8 @@ class CEOScraper:
         
         print(f"Enriching {len(data_list)} CEO profiles...")
         for entry in data_list:
-            # 1. Find CEO Name
-            entry["Full Name"] = self.find_ceo_name(entry["Company Name"])
+            # 1. Find CEO Name in real-time
+            entry["Full Name"] = self.find_ceo_name(entry["Company Name"], entry.get("Company Wiki URL"))
             
             # 2. Find Email
             if entry["Full Name"] != "Unknown CEO":

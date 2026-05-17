@@ -53,8 +53,9 @@ def log_reply_to_excel(sender_email, sender_name, subject, body):
 def get_auto_reply(sender_email, sender_name):
     try:
         df = pd.read_excel(CEO_DATA_PATH)
-        # Assuming 'Email' column exists
-        match = df[df["Email"].str.lower() == sender_email.lower()] if "Email" in df.columns else pd.DataFrame()
+        # 4. LOOKUP CRM Lookup
+        # Cross-reference sender email with ceo_data.xlsx to get CEO's first name + company
+        match = df[df["Email Address"].str.lower() == sender_email.lower()] if "Email Address" in df.columns else pd.DataFrame()
         
         if not match.empty:
             full_name = match.iloc[0]["Full Name"] if "Full Name" in match.columns else sender_name
@@ -64,6 +65,8 @@ def get_auto_reply(sender_email, sender_name):
             first_name = sender_name.split()[0] if sender_name else "there"
             company = "your company"
 
+        # 5. COMPOSE Build Auto-Reply
+        # Load auto-reply template and inject {{first_name}}, {{company}}, {{meeting_link}}
         with open(TEMPLATE_PATH, "r") as f:
             template = f.read()
             
@@ -84,12 +87,17 @@ def send_auto_reply(to_email, to_name, original_subject):
     msg.attach(MIMEText(body, "plain"))
     
     try:
+        # 6. SEND Dispatch Reply
+        # Send personalised auto-reply within 5 seconds of detecting the incoming email
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
             s.starttls()
             s.login(EMAIL_USER, EMAIL_PASS)
             s.sendmail(EMAIL_USER, to_email, msg.as_string())
         
         print(f"[{datetime.now()}] Sent auto-reply to {to_name} <{to_email}>")
+        
+        # 7. LOG Record to Excel
+        # Append replied status + timestamp + reply text to Sheet 3 'Replies Log' in Excel
         log_reply_to_excel(to_email, to_name, original_subject, body)
     except Exception as e:
         print(f"Failed to send auto-reply: {e}")
@@ -104,7 +112,8 @@ def listen_inbox():
             mail.login(EMAIL_USER, EMAIL_PASS)
             mail.select("inbox")
             
-            # Search for unseen messages
+            # 1. LISTEN Monitor Inbox
+            # Use IMAP / Gmail API to poll replies@yourdomain.com every 60 seconds
             _, ids = mail.search(None, "UNSEEN")
             
             for num in ids[0].split():
@@ -114,12 +123,22 @@ def listen_inbox():
                 _, data = mail.fetch(num, "(RFC822)")
                 msg = email.message_from_bytes(data[0][1])
                 
-                # Parse sender
+                # 3. PARSE Extract Sender
+                # Parse sender name + email from the From: header of the incoming reply
                 sender_raw = msg.get("From")
                 sender_name, sender_email = email.utils.parseaddr(sender_raw)
                 
-                # Parse subject
+                # Parse subject and check headers for reply detection
                 subject = decode_str(msg.get("Subject"))
+                in_reply_to = msg.get("In-Reply-To")
+                references = msg.get("References")
+                
+                # 2. DETECT Identify Reply
+                # Match incoming email Thread-ID or In-Reply-To header
+                if not in_reply_to and not references:
+                    print(f"[{datetime.now()}] Ignored: Email from {sender_email} is not a reply (Missing In-Reply-To).")
+                    seen_ids.add(num)
+                    continue
                 
                 print(f"[{datetime.now()}] Detected reply from {sender_name} <{sender_email}>: {subject}")
                 
