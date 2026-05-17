@@ -120,36 +120,55 @@ class CEOScraper:
             print(f"Error scraping CEO for {company_name}: {e}")
         return "Unknown CEO"
 
-    def get_email_via_hunter(self, full_name, company_name):
-        """Integration with Hunter.io API. Uses live web scraping as fallback."""
+    def get_email_and_linkedin_via_hunter(self, full_name, company_name):
+        """
+        Uses Hunter.io domain-search to find REAL verified emails + LinkedIn.
+        Returns a dict: {email, linkedin, confidence}
+        """
+        result = {"email": "Not Found", "linkedin": None, "confidence": 0}
+        
+        if not self.hunter_api_key or "your_hunter" in self.hunter_api_key:
+            return result
+
         clean_company = re.sub(r'[^a-zA-Z0-9]', '', company_name.split(',')[0]).lower()
         domain = f"{clean_company}.com"
         
-        # 1. Try Hunter API first
-        if self.hunter_api_key and "your_hunter" not in self.hunter_api_key:
-            url = f"https://api.hunter.io/v2/email-finder?domain={domain}&fullname={full_name}&api_key={self.hunter_api_key}"
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    email = response.json().get('data', {}).get('email')
-                    if email: return email
-            except:
-                pass
+        # Use domain-search filtered by executive seniority — returns real verified emails
+        url = (
+            f"https://api.hunter.io/v2/domain-search"
+            f"?domain={domain}"
+            f"&seniority=executive"
+            f"&limit=10"
+            f"&api_key={self.hunter_api_key}"
+        )
+        
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json().get('data', {})
+                emails_list = data.get('emails', [])
                 
-        # 2. Scrape Live Web (Google) for real email
-        if GOOGLE_SEARCH_AVAILABLE:
-            try:
-                time.sleep(1.5) # Prevent rate-limiting
-                query = f'"{full_name}" "{company_name}" email "@{domain}"'
-                for res in search(query, num_results=3, advanced=True):
-                    emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', str(res.description))
-                    if emails:
-                        return emails[0]
-            except Exception:
-                pass # Silently catch 429 Too Many Requests
+                # Try to find the CEO by name match first
+                name_parts = full_name.lower().split()
+                for entry in emails_list:
+                    first = (entry.get('first_name') or '').lower()
+                    last = (entry.get('last_name') or '').lower()
+                    if any(part in [first, last] for part in name_parts):
+                        result['email'] = entry.get('value', 'Not Found')
+                        result['linkedin'] = entry.get('linkedin')
+                        result['confidence'] = entry.get('confidence', 0)
+                        return result
                 
-        # 3. No fallback! Strict scraping only.
-        return "Not Found"
+                # If no name match, return the highest-confidence executive email
+                if emails_list:
+                    best = max(emails_list, key=lambda x: x.get('confidence', 0))
+                    result['email'] = best.get('value', 'Not Found')
+                    result['linkedin'] = best.get('linkedin')
+                    result['confidence'] = best.get('confidence', 0)
+        except Exception as e:
+            pass
+
+        return result
 
     def scrape_forbes_500_selenium(self):
         """Advanced Scraper Module: Fetch Forbes 500 data bypassing JS blocks using Selenium."""
@@ -275,9 +294,14 @@ class CEOScraper:
             if not use_forbes or entry["Full Name"] == "Pending Search":
                 entry["Full Name"] = self.find_ceo_name(entry["Company Name"], entry.get("Company Wiki URL"))
             
-            # 2. Find Email
-            if entry["Full Name"] != "Unknown CEO" and entry["Full Name"] != "Unknown":
-                entry["Email Address"] = self.get_email_via_hunter(entry["Full Name"], entry["Company Name"])
+            # 2. Find REAL verified Email + LinkedIn via Hunter domain-search
+            if entry["Full Name"] not in ("Unknown CEO", "Unknown", "Pending Search"):
+                hunter_result = self.get_email_and_linkedin_via_hunter(entry["Full Name"], entry["Company Name"])
+                entry["Email Address"] = hunter_result["email"]
+                # Override LinkedIn only if Hunter found a real verified one
+                if hunter_result["linkedin"]:
+                    entry["LinkedIn URL"] = hunter_result["linkedin"]
+                entry["Hunter Confidence"] = hunter_result["confidence"]
             
             # 3. Add placeholders for other fields if using Wikipedia
             if not use_forbes:

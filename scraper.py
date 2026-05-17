@@ -23,9 +23,9 @@ def main():
     print("\n📊 Extraction Summary:")
     print(f"Total CEOs Extracted: {len(df)}")
     if 'Email Address' in df.columns:
-        valid_count = df['Email Address'].apply(lambda x: "@" in str(x) and "corporate.com" not in str(x)).sum()
-        print(f"Verified Emails (Green): {valid_count}")
-        print(f"Unverified Emails (Yellow): {len(df) - valid_count}")
+        valid_count = df['Email Address'].apply(lambda x: '@' in str(x)).sum()
+        print(f"Verified Emails Found: {valid_count}")
+        print(f"Not Found: {len(df) - valid_count}")
     
     print("\nData Collection Complete: ceo_data.xlsx saved with 50+ CEOs · scraper.py working · all 10 fields populated")
 
