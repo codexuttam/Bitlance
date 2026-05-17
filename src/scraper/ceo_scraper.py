@@ -148,8 +148,8 @@ class CEOScraper:
             except Exception:
                 pass # Silently catch 429 Too Many Requests
                 
-        # 3. Ultimate Fallback if everything is blocked by captchas
-        return f"{full_name.split()[0].lower()}@{domain}"
+        # 3. No fallback! Strict scraping only.
+        return "Not Found"
 
     def scrape_forbes_500_selenium(self):
         """Advanced Scraper Module: Fetch Forbes 500 data bypassing JS blocks using Selenium."""
