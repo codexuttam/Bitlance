@@ -11,3 +11,4 @@ imapclient
 google-generativeai
 python-docx
 validators
+googlesearch-python

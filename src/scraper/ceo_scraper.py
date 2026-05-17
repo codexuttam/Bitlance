@@ -14,6 +14,11 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
+try:
+    from googlesearch import search
+    GOOGLE_SEARCH_AVAILABLE = True
+except ImportError:
+    GOOGLE_SEARCH_AVAILABLE = False
 
 load_dotenv("config/.env")
 
@@ -58,10 +63,8 @@ class CEOScraper:
                         company_tag = cols[1].find('a')
                         company_wiki_url = "https://en.wikipedia.org" + company_tag['href'] if company_tag else None
                         
-                        # Generate accurate LinkedIn profile ID
-                        clean_name = re.sub(r'[^a-zA-Z0-9]', '-', "Pending Search").lower()
-                        clean_company = re.sub(r'[^a-zA-Z0-9]', '-', company).lower()
-                        linkedin_url = f"https://www.linkedin.com/in/{clean_name}-{clean_company}"
+                        # Generate accurate LinkedIn profile ID via Google Scraping
+                        linkedin_url = self.scrape_linkedin_id(company + " CEO", company)
                         
                         ceo_data.append({
                             "Full Name": "Pending Search",
@@ -178,6 +181,28 @@ class CEOScraper:
         except Exception as e:
             return base_url
 
+    def scrape_linkedin_id(self, name, company):
+        """Perform a live Google Search to scrape the exact LinkedIn Profile ID."""
+        clean_name = re.sub(r'[^a-zA-Z0-9]', '-', name).lower()
+        clean_company = re.sub(r'[^a-zA-Z0-9]', '-', company.split()[0]).lower()
+        fallback_url = f"https://www.linkedin.com/in/{clean_name}-{clean_company}"
+        
+        if not GOOGLE_SEARCH_AVAILABLE:
+            return fallback_url
+            
+        try:
+            time.sleep(1.5) # Prevent Google from blocking IP due to rate limits
+            query = f"site:linkedin.com/in/ {name} {company}"
+            
+            # Scrape top 3 Google results looking for a direct linkedin profile
+            for url in search(query, num_results=3):
+                if "linkedin.com/in/" in url and "/dir/" not in url:
+                    return url
+        except Exception as e:
+            pass # Silently fallback if Google throws a 429 Too Many Requests error
+            
+        return fallback_url
+
     def scrape_forbes_api(self, limit=100):
         """Fetches live, real-world data from Forbes' hidden JSON API endpoint."""
         print("Scraping live data from Forbes API...")
@@ -204,10 +229,8 @@ class CEOScraper:
                 net_worth = f"${net_worth_raw / 1000:.1f} Billion" if net_worth_raw else "Unknown"
                 uri = p.get('uri', '')
                 
-                # Generate accurate LinkedIn profile ID pattern
-                clean_name = re.sub(r'[^a-zA-Z0-9]', '-', name).lower()
-                clean_company = re.sub(r'[^a-zA-Z0-9]', '-', company.split()[0]).lower()
-                linkedin_url = f"https://www.linkedin.com/in/{clean_name}-{clean_company}"
+                # Generate accurate LinkedIn profile ID pattern via Google Scraping
+                linkedin_url = self.scrape_linkedin_id(name, company)
                 
                 ceo_data.append({
                     "Full Name": DataCleaner.clean_text(name),
