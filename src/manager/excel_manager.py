@@ -61,9 +61,9 @@ class ExcelManager:
                 for sheet_name in ['CEO Master List', 'Email Ready']:
                     ws = workbook[sheet_name]
                     
-                    # Header Style
-                    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-                    header_font = Font(color="FFFFFF", bold=True)
+                    # Header Style (Light Blue fill, Black bold text for LibreOffice compatibility)
+                    header_fill = PatternFill(start_color="FFD9E1F2", end_color="FFD9E1F2", fill_type="solid")
+                    header_font = Font(color="FF000000", bold=True)
                     
                     for cell in ws[1]:
                         cell.fill = header_fill
@@ -130,11 +130,11 @@ class ExcelManager:
             
             if sheet_name not in wb.sheetnames:
                 ws = wb.create_sheet(sheet_name)
-                # Header with styling
+                # Header with styling (Black text, light blue background)
                 ws.append(["Timestamp", "Sender Name", "Sender Email", "Subject", "Reply Text", "Status"])
                 for cell in ws[1]:
-                    cell.font = Font(bold=True, color="FFFFFF")
-                    cell.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                    cell.font = Font(bold=True, color="FF000000")
+                    cell.fill = PatternFill(start_color="FFD9E1F2", end_color="FFD9E1F2", fill_type="solid")
             else:
                 ws = wb[sheet_name]
             

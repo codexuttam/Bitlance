@@ -52,10 +52,16 @@ class CEOScraper:
                         company = DataCleaner.clean_text(cols[1].text)
                         industry = DataCleaner.clean_text(cols[2].text)
                         revenue = DataCleaner.clean_text(cols[3].text)
-                        country = DataCleaner.clean_text(cols[5].text) if len(cols) > 5 else "Global"
+                        # Column 6 is Headquarters (Country/City). Column 5 is Employees (number)
+                        country = DataCleaner.clean_text(cols[6].text) if len(cols) > 6 else "Global"
                         
                         company_tag = cols[1].find('a')
                         company_wiki_url = "https://en.wikipedia.org" + company_tag['href'] if company_tag else None
+                        
+                        # Generate accurate LinkedIn profile ID
+                        clean_name = re.sub(r'[^a-zA-Z0-9]', '-', "Pending Search").lower()
+                        clean_company = re.sub(r'[^a-zA-Z0-9]', '-', company).lower()
+                        linkedin_url = f"https://www.linkedin.com/in/{clean_name}-{clean_company}"
                         
                         ceo_data.append({
                             "Full Name": "Pending Search",
@@ -64,7 +70,7 @@ class CEOScraper:
                             "Country": country,
                             "Email Address": "Contact Pending",
                             "Mobile / Contact": "N/A",
-                            "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={company}%20CEO",
+                            "LinkedIn URL": linkedin_url,
                             "Net Worth (USD)": "Billionaire Status",
                             "Company Revenue": revenue,
                             "Data Source URL": self.wiki_url,
@@ -197,6 +203,11 @@ class CEOScraper:
                 net_worth = f"${net_worth_raw / 1000:.1f} Billion" if net_worth_raw else "Unknown"
                 uri = p.get('uri', '')
                 
+                # Generate accurate LinkedIn profile ID pattern
+                clean_name = re.sub(r'[^a-zA-Z0-9]', '-', name).lower()
+                clean_company = re.sub(r'[^a-zA-Z0-9]', '-', company.split()[0]).lower()
+                linkedin_url = f"https://www.linkedin.com/in/{clean_name}-{clean_company}"
+                
                 ceo_data.append({
                     "Full Name": DataCleaner.clean_text(name),
                     "Company Name": DataCleaner.clean_text(company),
@@ -204,7 +215,7 @@ class CEOScraper:
                     "Country": DataCleaner.clean_text(country),
                     "Email Address": "Contact Pending",
                     "Mobile / Contact": "N/A",
-                    "LinkedIn URL": f"https://www.linkedin.com/search/results/all/?keywords={name}%20{company}",
+                    "LinkedIn URL": linkedin_url,
                     "Net Worth (USD)": net_worth,
                     "Company Revenue": "N/A (Forbes List)",
                     "Data Source URL": f"https://www.forbes.com/profile/{uri}/" if uri else url,
