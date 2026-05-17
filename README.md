@@ -99,7 +99,33 @@ Bitlance/
 - [x] **auto_reply_template.txt**: Personalized plain-text acknowledgement template.
 - [x] **README.md**: Complete setup and execution documentation.
 
+---
 
+## 🎁 Bonus: No-Code Automation
+
+### n8n (Self-Hosted, Free)
+A complete workflow blueprint is provided in [`n8n_workflow_blueprint.json`](n8n_workflow_blueprint.json).
+
+To run it:
+```bash
+npx n8n
+# Open http://localhost:5678 → Import the JSON blueprint → Activate
+```
+
+Workflow:
+1. **Gmail Trigger** — Polls inbox every minute for unread emails.
+2. **IF Filter** — Detects genuine replies via `In-Reply-To` / `References` headers.
+3. **Gmail Send** — Dispatches personalised auto-reply with Calendly booking link.
+4. **Google Sheets** — Logs every interaction to a `Replies Log` sheet.
+
+### Zapier (100 tasks/month Free)
+| Step | App | Event |
+|------|-----|-------|
+| Trigger | Gmail | New Email (INBOX) |
+| Filter | Filter by Zapier | Subject contains "Re:" |
+| Action | Gmail | Send personalised reply |
+
+---
 
 ## ⚖️ Disclaimer
 This tool is for educational purposes. Ensure compliance with CAN-SPAM Act and GDPR when performing email outreach.

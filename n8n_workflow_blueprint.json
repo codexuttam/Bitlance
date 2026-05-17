@@ -1,0 +1,96 @@
+{
+  "name": "Bitlance CEO Auto-Reply Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "filters": { "readStatus": "unread", "labelIds": ["INBOX"] },
+        "options": {}
+      },
+      "id": "gmail-trigger",
+      "name": "Gmail Trigger — New Unread Email",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json[\"headers\"][\"in-reply-to\"] ?? $json[\"headers\"][\"references\"] ?? \"\" }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-filter",
+      "name": "IF — Is Genuine Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "sendEmail",
+        "sendTo": "={{ $json[\"from\"][\"value\"][0][\"address\"] }}",
+        "subject": "=Re: {{ $json[\"subject\"] }}",
+        "emailType": "text",
+        "message": "=Hi {{ $json[\"from\"][\"value\"][0][\"name\"].split(\" \")[0] }},\n\nThank you for getting back to me! I'd love to explore how we can work together.\n\nWould you be open to a quick 15-minute call this week?\n\nBook a time here: https://calendly.com/yourname\n\nBest regards,\nUttamraj Singh\nBitlance Outreach Team",
+        "options": {}
+      },
+      "id": "gmail-send",
+      "name": "Gmail — Send Auto-Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "value": "YOUR_GOOGLE_SHEET_ID" },
+        "sheetName": "Replies Log",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now }}",
+            "Sender Email": "={{ $json[\"from\"][\"value\"][0][\"address\"] }}",
+            "Sender Name": "={{ $json[\"from\"][\"value\"][0][\"name\"] }}",
+            "Subject": "={{ $json[\"subject\"] }}",
+            "Auto-Reply Sent": "Yes"
+          }
+        }
+      },
+      "id": "google-sheets-log",
+      "name": "Google Sheets — Log Reply",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [680, 400]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger — New Unread Email": {
+      "main": [[{ "node": "IF — Is Genuine Reply?", "type": "main", "index": 0 }]]
+    },
+    "IF — Is Genuine Reply?": {
+      "main": [
+        [
+          { "node": "Gmail — Send Auto-Reply", "type": "main", "index": 0 },
+          { "node": "Google Sheets — Log Reply", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Bitlance CEO Outreach — Auto-Reply Workflow. Triggers on new unread emails, filters genuine replies using In-Reply-To header, sends a personalised auto-reply via Gmail, and logs the interaction to Google Sheets.",
+    "zapier_equivalent": {
+      "trigger": "Gmail — New Email (INBOX, unread)",
+      "filter": "Filter by Zapier — Subject contains 'Re:'",
+      "action": "Gmail — Send Email (personalised reply body)"
+    }
+  }
+}
