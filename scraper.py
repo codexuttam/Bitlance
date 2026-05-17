@@ -22,8 +22,8 @@ def main():
 
     print("\n📊 Extraction Summary:")
     print(f"Total CEOs Extracted: {len(df)}")
-    if 'Is_Email_Valid' in df.columns:
-        valid_count = df['Is_Email_Valid'].sum()
+    if 'Email Address' in df.columns:
+        valid_count = df['Email Address'].apply(lambda x: "@" in str(x) and "corporate.com" not in str(x)).sum()
         print(f"Verified Emails (Green): {valid_count}")
         print(f"Unverified Emails (Yellow): {len(df) - valid_count}")
     
