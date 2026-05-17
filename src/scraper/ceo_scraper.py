@@ -121,23 +121,35 @@ class CEOScraper:
         return "Unknown CEO"
 
     def get_email_via_hunter(self, full_name, company_name):
-        """Integration with Hunter.io API."""
-        if not self.hunter_api_key or "your_hunter" in self.hunter_api_key:
-            # Fallback to programmatic pattern generation if API key is missing
-            return f"{full_name.lower().replace(' ', '.')}@corporate.com"
-
-        domain = company_name.lower().replace(" ", "").replace(".", "") + ".com"
-        url = f"https://api.hunter.io/v2/email-finder?domain={domain}&fullname={full_name}&api_key={self.hunter_api_key}"
+        """Integration with Hunter.io API. Uses live web scraping as fallback."""
+        clean_company = re.sub(r'[^a-zA-Z0-9]', '', company_name.split(',')[0]).lower()
+        domain = f"{clean_company}.com"
         
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                email = data.get('data', {}).get('email')
-                if email: return email
-        except:
-            pass
-        return f"{full_name.lower().replace(' ', '.')}@corporate.com"
+        # 1. Try Hunter API first
+        if self.hunter_api_key and "your_hunter" not in self.hunter_api_key:
+            url = f"https://api.hunter.io/v2/email-finder?domain={domain}&fullname={full_name}&api_key={self.hunter_api_key}"
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    email = response.json().get('data', {}).get('email')
+                    if email: return email
+            except:
+                pass
+                
+        # 2. Scrape Live Web (Google) for real email
+        if GOOGLE_SEARCH_AVAILABLE:
+            try:
+                time.sleep(1.5) # Prevent rate-limiting
+                query = f'"{full_name}" "{company_name}" email "@{domain}"'
+                for res in search(query, num_results=3, advanced=True):
+                    emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', str(res.description))
+                    if emails:
+                        return emails[0]
+            except Exception:
+                pass # Silently catch 429 Too Many Requests
+                
+        # 3. Ultimate Fallback if everything is blocked by captchas
+        return f"{full_name.split()[0].lower()}@{domain}"
 
     def scrape_forbes_500_selenium(self):
         """Advanced Scraper Module: Fetch Forbes 500 data bypassing JS blocks using Selenium."""
