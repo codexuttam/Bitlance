@@ -89,48 +89,56 @@ def get_auto_reply(sender_email, sender_name):
 def send_auto_reply(to_email, to_name, original_subject):
     body = get_auto_reply(to_email, to_name)
     
-    # We must use SendGrid Web API because SMTP port 587 is blocked on the network!
-    sendgrid_key = os.getenv("SMTP_PASS")
-    from_email = os.getenv("FROM_EMAIL", "uttamrajsingh423@gmail.com")
+    from_email = EMAIL_USER
     from_name = os.getenv("FROM_NAME", "Uttamraj Singh from Bitlance")
     
-    headers = {
-        "Authorization": f"Bearer {sendgrid_key}",
-        "Content-Type": "application/json"
-    }
+    # Construct MIME message
+    msg = MIMEMultipart("alternative")
+    msg['From'] = f"{from_name} <{from_email}>"
+    msg['To'] = f"{to_name} <{to_email}>"
+    msg['Subject'] = f"Re: {original_subject}"
     
-    # SendGrid v3 mail/send payload
-    payload = {
-        "personalizations": [{
-            "to": [{"email": to_email}],
-            "subject": f"Re: {original_subject}"
-        }],
-        "from": {
-            "email": from_email,
-            "name": from_name
-        },
-        "content": [{
-            "type": "text/html",
-            "value": body.replace("\n", "<br>") # Convert plain text linebreaks to HTML
-        }]
-    }
+    # Plain text and HTML versions
+    text_part = MIMEText(body, "plain")
+    html_part = MIMEText(body.replace("\n", "<br>"), "html")
+    msg.attach(text_part)
+    msg.attach(html_part)
     
-    try:
-        response = requests.post(
-            "https://api.sendgrid.com/v3/mail/send",
-            headers=headers,
-            json=payload,
-            timeout=10
-        )
-        
-        if response.status_code in [200, 202]:
-            print(f"[{datetime.now()}] Sent auto-reply to {to_name} <{to_email}>")
-            # Append replied status + timestamp + reply text to Sheet 3 'Replies Log' in Excel
-            log_reply_to_excel(to_email, to_name, original_subject, body)
-        else:
-            print(f"Failed to send auto-reply via SendGrid: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"Failed to send auto-reply: {e}")
+    # Send using robust Gmail SMTP with automatic retry and Port 465 / 587 fallback
+    max_retries = 3
+    success = False
+    
+    for attempt in range(1, max_retries + 1):
+        # We try port 465 (SSL) and port 587 (STARTTLS)
+        for port in [465, 587]:
+            try:
+                print(f"[{datetime.now()}] Attempting to send auto-reply to {to_email} (Attempt {attempt}/{max_retries}, Port {port})...")
+                if port == 465:
+                    server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20)
+                else:
+                    server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
+                    server.starttls()
+                
+                with server:
+                    server.login(EMAIL_USER, EMAIL_PASS)
+                    server.sendmail(from_email, to_email, msg.as_string())
+                
+                print(f"[{datetime.now()}] Sent auto-reply to {to_name} <{to_email}>")
+                # Append replied status + timestamp + reply text to Sheet 3 'Replies Log' in Excel
+                log_reply_to_excel(to_email, to_name, original_subject, body)
+                success = True
+                break
+            except Exception as e:
+                print(f"[{datetime.now()}] Port {port} failed on attempt {attempt}: {e}")
+                
+        if success:
+            break
+        if attempt < max_retries:
+            print(f"[{datetime.now()}] Retrying SMTP send in 2 seconds...")
+            time.sleep(2)
+            
+    if not success:
+        print(f"[{datetime.now()}] ❌ Failed to send auto-reply via Gmail SMTP after all attempts.")
 
 def listen_inbox():
     seen_ids = set()
@@ -147,6 +155,16 @@ def listen_inbox():
             _, ids = mail.search(None, "UNSEEN")
             unseen_count = len(ids[0].split())
             print(f"[{datetime.now()}] Polling inbox... Found {unseen_count} unread emails.")
+            
+            # 3. CRM FILTER PREPARATION: Read CRM once per polling interval
+            crm_emails = set()
+            try:
+                if os.path.exists(CEO_DATA_PATH):
+                    df = pd.read_excel(CEO_DATA_PATH)
+                    if "Email Address" in df.columns:
+                        crm_emails = set(df["Email Address"].dropna().str.lower().str.strip())
+            except Exception as e:
+                print(f"[{datetime.now()}] Warning: failed to pre-load CRM emails: {e}")
             
             # Fetch only the 50 most recent unread emails to prevent hanging on 15,000+ old unread spams
             for num in ids[0].split()[-50:]:
@@ -168,12 +186,10 @@ def listen_inbox():
                 
                 # 3. CRM FILTER: Check if the sender is actually one of the CEOs whom we sent the mail
                 is_in_crm = False
-                try:
-                    df = pd.read_excel(CEO_DATA_PATH)
-                    if "Email Address" in df.columns:
-                        is_in_crm = (df["Email Address"].str.lower().str.strip() == sender_email.lower().strip()).any()
-                except Exception as e:
-                    # Fallback to true if we fail to read Excel to avoid completely blocking the listener
+                if crm_emails:
+                    is_in_crm = sender_email.lower().strip() in crm_emails
+                else:
+                    # Fallback to true if CRM list is empty or couldn't load to avoid blocking replies
                     is_in_crm = True
                 
                 if not is_in_crm:
