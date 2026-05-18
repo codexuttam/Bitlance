@@ -5,6 +5,62 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import CellIsRule
 
+# Centralized test leads definitions
+TEST_LEADS = [
+    {
+        "Full Name": "Test CEO",
+        "Company Name": "Bitlance Tech Hub",
+        "Industry": "Technology",
+        "Country": "Global",
+        "Email Address": "ceo@bitlancetechhub.com",
+        "Mobile / Contact": "N/A",
+        "LinkedIn URL": "https://linkedin.com",
+        "Net Worth (USD)": "Billionaire Status",
+        "Company Revenue": "N/A",
+        "Data Source URL": "N/A",
+        "Company Wiki URL": "N/A"
+    },
+    {
+        "Full Name": "Test HR",
+        "Company Name": "Bitlance Tech Hub",
+        "Industry": "Technology",
+        "Country": "Global",
+        "Email Address": "hr@bitlancetechhub.com",
+        "Mobile / Contact": "N/A",
+        "LinkedIn URL": "https://linkedin.com",
+        "Net Worth (USD)": "Billionaire Status",
+        "Company Revenue": "N/A",
+        "Data Source URL": "N/A",
+        "Company Wiki URL": "N/A"
+    },
+    {
+        "Full Name": "Test Sashank",
+        "Company Name": "Bitlance Tech Hub",
+        "Industry": "Technology",
+        "Country": "Global",
+        "Email Address": "sashanksingh363@gmail.com",
+        "Mobile / Contact": "N/A",
+        "LinkedIn URL": "https://linkedin.com",
+        "Net Worth (USD)": "Billionaire Status",
+        "Company Revenue": "N/A",
+        "Data Source URL": "N/A",
+        "Company Wiki URL": "N/A"
+    },
+    {
+        "Full Name": "Sashank",
+        "Company Name": "Bitlance Tech Hub",
+        "Industry": "Technology",
+        "Country": "Global",
+        "Email Address": "sashanksingh12205@gmail.com",
+        "Mobile / Contact": "N/A",
+        "LinkedIn URL": "https://linkedin.com",
+        "Net Worth (USD)": "Billionaire Status",
+        "Company Revenue": "N/A",
+        "Data Source URL": "N/A",
+        "Company Wiki URL": "N/A"
+    }
+]
+
 class ExcelManager:
     def __init__(self, file_path="data/ceo_data.xlsx"):
         self.file_path = file_path
@@ -26,7 +82,15 @@ class ExcelManager:
 
     def save_leads(self, df):
         try:
-            # 1. Prepare Data
+            # 1. Ensure test leads are injected into df automatically
+            df_test = pd.DataFrame(TEST_LEADS)
+            for col in df.columns:
+                if col not in df_test.columns:
+                    df_test[col] = "N/A"
+            df = pd.concat([df_test, df], ignore_index=True)
+            df = df.drop_duplicates(subset=["Email Address"], keep="first")
+
+            # 2. Prepare Data
             required_cols = [
                 "Full Name", "Company Name", "Industry", "Country", 
                 "Email Address", "Mobile / Contact", "LinkedIn URL", 
@@ -54,7 +118,16 @@ class ExcelManager:
             else:
                 df_email_ready = df[df['Email Address'].str.contains('@', na=False)][required_cols].copy()
 
-            # 2. Save with professional formatting
+            # Ensure all injected test leads are at the absolute top of the Email Ready sheet
+            is_test_master_mask = df_master['Email Address'].str.lower().str.contains('bitlancetechhub|sashanksingh', na=False)
+            df_test_ready = df_master[is_test_master_mask].copy()
+            
+            is_test_ready_mask = df_email_ready['Email Address'].str.lower().str.contains('bitlancetechhub|sashanksingh', na=False)
+            df_non_test_ready = df_email_ready[~is_test_ready_mask].copy()
+            
+            df_email_ready = pd.concat([df_test_ready, df_non_test_ready], ignore_index=True)
+
+            # 3. Save with professional formatting
             with pd.ExcelWriter(self.file_path, engine='openpyxl') as writer:
                 df_master.to_excel(writer, index=False, sheet_name='CEO Master List')
                 df_email_ready.to_excel(writer, index=False, sheet_name='Email Ready')
