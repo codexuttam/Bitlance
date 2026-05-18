@@ -8,8 +8,7 @@ def main():
 
     # 1. Initialize Scraper and Run Pipeline
     scraper = CEOScraper()
-    # Scrape 100 CEOs using the Wikipedia Fortune 500 list for better real-email discovery
-    df = scraper.run_full_pipeline(limit=100, use_forbes=False)
+    df = scraper.run_full_pipeline(limit=100, use_forbes=True)
     
     if df.empty:
         print("❌ Data extraction failed.")

@@ -4,12 +4,21 @@ import time
 import smtplib
 import pandas as pd
 import os
+import socket
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import decode_header
 from datetime import datetime
 from dotenv import load_dotenv
 from src.manager.excel_manager import ExcelManager
+
+# Force IPv4 connection to bypass broken IPv6 route to host on some servers
+orig_getaddrinfo = socket.getaddrinfo
+def patched_getaddrinfo(*args, **kwargs):
+    responses = orig_getaddrinfo(*args, **kwargs)
+    return [r for r in responses if r[0] == socket.AF_INET]
+socket.getaddrinfo = patched_getaddrinfo
 
 # Load environment variables
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", ".env")
@@ -79,26 +88,47 @@ def get_auto_reply(sender_email, sender_name):
 
 def send_auto_reply(to_email, to_name, original_subject):
     body = get_auto_reply(to_email, to_name)
-    msg = MIMEMultipart()
-    msg["From"] = EMAIL_USER
-    msg["To"] = to_email
-    msg["Subject"] = f"Re: {original_subject}"
     
-    msg.attach(MIMEText(body, "plain"))
+    # We must use SendGrid Web API because SMTP port 587 is blocked on the network!
+    sendgrid_key = os.getenv("SMTP_PASS")
+    from_email = os.getenv("FROM_EMAIL", "uttamrajsingh423@gmail.com")
+    from_name = os.getenv("FROM_NAME", "Uttamraj Singh from Bitlance")
+    
+    headers = {
+        "Authorization": f"Bearer {sendgrid_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # SendGrid v3 mail/send payload
+    payload = {
+        "personalizations": [{
+            "to": [{"email": to_email}],
+            "subject": f"Re: {original_subject}"
+        }],
+        "from": {
+            "email": from_email,
+            "name": from_name
+        },
+        "content": [{
+            "type": "text/html",
+            "value": body.replace("\n", "<br>") # Convert plain text linebreaks to HTML
+        }]
+    }
     
     try:
-        # 6. SEND Dispatch Reply
-        # Send personalised auto-reply within 5 seconds of detecting the incoming email
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
-            s.starttls()
-            s.login(EMAIL_USER, EMAIL_PASS)
-            s.sendmail(EMAIL_USER, to_email, msg.as_string())
+        response = requests.post(
+            "https://api.sendgrid.com/v3/mail/send",
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
         
-        print(f"[{datetime.now()}] Sent auto-reply to {to_name} <{to_email}>")
-        
-        # 7. LOG Record to Excel
-        # Append replied status + timestamp + reply text to Sheet 3 'Replies Log' in Excel
-        log_reply_to_excel(to_email, to_name, original_subject, body)
+        if response.status_code in [200, 202]:
+            print(f"[{datetime.now()}] Sent auto-reply to {to_name} <{to_email}>")
+            # Append replied status + timestamp + reply text to Sheet 3 'Replies Log' in Excel
+            log_reply_to_excel(to_email, to_name, original_subject, body)
+        else:
+            print(f"Failed to send auto-reply via SendGrid: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Failed to send auto-reply: {e}")
 
@@ -115,8 +145,11 @@ def listen_inbox():
             # 1. LISTEN Monitor Inbox
             # Use IMAP / Gmail API to poll replies@yourdomain.com every 60 seconds
             _, ids = mail.search(None, "UNSEEN")
+            unseen_count = len(ids[0].split())
+            print(f"[{datetime.now()}] Polling inbox... Found {unseen_count} unread emails.")
             
-            for num in ids[0].split():
+            # Fetch only the 50 most recent unread emails to prevent hanging on 15,000+ old unread spams
+            for num in ids[0].split()[-50:]:
                 if num in seen_ids:
                     continue
                 
@@ -133,10 +166,29 @@ def listen_inbox():
                 in_reply_to = msg.get("In-Reply-To")
                 references = msg.get("References")
                 
+                # 3. CRM FILTER: Check if the sender is actually one of the CEOs whom we sent the mail
+                is_in_crm = False
+                try:
+                    df = pd.read_excel(CEO_DATA_PATH)
+                    if "Email Address" in df.columns:
+                        is_in_crm = (df["Email Address"].str.lower().str.strip() == sender_email.lower().strip()).any()
+                except Exception as e:
+                    # Fallback to true if we fail to read Excel to avoid completely blocking the listener
+                    is_in_crm = True
+                
+                if not is_in_crm:
+                    seen_ids.add(num)
+                    continue # Silently skip! No logs printed.
+
                 # 2. DETECT Identify Reply
-                # Match incoming email Thread-ID or In-Reply-To header
-                if not in_reply_to and not references:
-                    print(f"[{datetime.now()}] Ignored: Email from {sender_email} is not a reply (Missing In-Reply-To).")
+                # Match incoming email Thread-ID, In-Reply-To header, or 'Re:' in the subject
+                is_reply = False
+                if in_reply_to or references:
+                    is_reply = True
+                elif subject and (subject.lower().startswith("re:") or "re :" in subject.lower()):
+                    is_reply = True
+
+                if not is_reply:
                     seen_ids.add(num)
                     continue
                 
