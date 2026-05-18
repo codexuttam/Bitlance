@@ -88,6 +88,22 @@ class CEOScraper:
 
     def find_ceo_name(self, company_name, company_wiki_url=None):
         """Scrape the CEO name directly from the company's Wikipedia page in real-time."""
+        # Titles that should never be returned as a name
+        ROLE_WORDS = {'ceo', 'chairman', 'chair', 'president', 'executive', 'officer',
+                      'director', 'founder', 'managing', 'chief', 'co-founder',
+                      'vice', 'unknown', 'pending', 'contact'}
+        
+        def is_valid_name(text):
+            """Check the text looks like an actual person name, not a role."""
+            if not text or len(text) < 4:
+                return False
+            words = text.lower().split()
+            # If ALL words are role-words, it's a title not a name
+            if all(w in ROLE_WORDS for w in words):
+                return False
+            # Real names have at least one word NOT in the role list
+            return any(w not in ROLE_WORDS for w in words)
+
         if not company_wiki_url:
             return "Unknown CEO"
             
@@ -103,19 +119,29 @@ class CEOScraper:
                         if th and 'Key people' in th.text:
                             td = tr.find('td', {'class': 'infobox-data'}) or tr.find('td')
                             if td:
-                                # Extract items (can be separated by <br>, <li>, etc)
-                                text = td.get_text(separator='|', strip=True)
-                                people = text.split('|')
-                                
-                                for person in people:
-                                    if 'CEO' in person or 'chief executive' in person.lower() or 'chairman' in person.lower():
-                                        name = person.split('(')[0].split(',')[0].strip()
-                                        return DataCleaner.clean_text(name)
-                                
-                                # If no explicit title, return the first person
-                                if people:
-                                    name = people[0].split('(')[0].split(',')[0].strip()
-                                    return DataCleaner.clean_text(name)
+                                # Each <li> or <br>-separated item is one person entry
+                                people_raw = []
+                                for li in td.find_all('li'):
+                                    people_raw.append(li.get_text(separator=' ', strip=True))
+                                if not people_raw:
+                                    text = td.get_text(separator='|', strip=True)
+                                    people_raw = text.split('|')
+
+                                # Pass 1: find someone with CEO/executive title — extract ONLY their name
+                                for person in people_raw:
+                                    if any(t in person.lower() for t in ['ceo', 'chief executive', 'president and ceo']):
+                                        # Name is the part BEFORE the parenthesis with the title
+                                        name = re.split(r'[\(,]', person)[0].strip()
+                                        name = DataCleaner.clean_text(name)
+                                        if is_valid_name(name):
+                                            return name
+
+                                # Pass 2: find chairman or first named person
+                                for person in people_raw:
+                                    name = re.split(r'[\(,]', person)[0].strip()
+                                    name = DataCleaner.clean_text(name)
+                                    if is_valid_name(name):
+                                        return name
         except Exception as e:
             print(f"Error scraping CEO for {company_name}: {e}")
         return "Unknown CEO"
