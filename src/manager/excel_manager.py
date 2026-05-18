@@ -43,12 +43,16 @@ class ExcelManager:
             
             df_master = df[required_cols].copy()
             
-            # Sheet 2: Email Ready (filtered)
-            # We use 'Is_Email_Valid' if it exists, otherwise check if Email != "Contact Pending"
-            if 'Is_Email_Valid' in df.columns:
+            # Sheet 2: Email Ready (filtered to only include 90%+ verified emails or our test emails)
+            if 'Hunter Confidence' in df.columns:
+                conf = pd.to_numeric(df['Hunter Confidence'], errors='coerce')
+                is_test = df['Email Address'].str.lower().str.contains('bitlancetechhub|sashanksingh', na=False)
+                mask = df['Email Address'].str.contains('@', na=False) & ((conf >= 90) | is_test | conf.isna())
+                df_email_ready = df[mask][required_cols].copy()
+            elif 'Is_Email_Valid' in df.columns:
                 df_email_ready = df[df['Is_Email_Valid'] == True][required_cols].copy()
             else:
-                df_email_ready = df[df['Email Address'].str.contains('@')][required_cols].copy()
+                df_email_ready = df[df['Email Address'].str.contains('@', na=False)][required_cols].copy()
 
             # 2. Save with professional formatting
             with pd.ExcelWriter(self.file_path, engine='openpyxl') as writer:
