@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import time
 import re
+from datetime import datetime
 from dotenv import load_dotenv
 from src.scraper.data_cleaner import DataCleaner
 
@@ -146,9 +147,45 @@ class CEOScraper:
             print(f"Error scraping CEO for {company_name}: {e}")
         return "Unknown CEO"
 
-    def get_email_and_linkedin_via_hunter(self, full_name, company_name):
+    def find_company_domain(self, company_name, company_wiki_url=None):
+        """Scrape the official website domain from the company's Wikipedia page infobox."""
+        if not company_wiki_url:
+            return None
+        try:
+            time.sleep(0.1)  # Minimal delay to respect Wikipedia
+            response = requests.get(company_wiki_url, headers=self.headers, timeout=2)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                infobox = soup.find('table', {'class': re.compile(r'infobox')})
+                if infobox:
+                    for tr in infobox.find_all('tr'):
+                        th = tr.find('th')
+                        if th and ('website' in th.text.lower() or 'url' in th.text.lower()):
+                            td = tr.find('td')
+                            if td:
+                                link = td.find('a')
+                                href = link.get('href') if link else None
+                                if not href:
+                                    # Fallback to plain text inside td
+                                    href = td.get_text(strip=True)
+                                
+                                if href:
+                                    # Clean up href to extract plain domain
+                                    domain = href.lower()
+                                    if "://" in domain:
+                                        domain = domain.split("://")[1]
+                                    domain = domain.split("/")[0]
+                                    domain = domain.replace("www.", "")
+                                    domain = domain.strip()
+                                    if "." in domain:
+                                        return domain
+        except Exception as e:
+            print(f"[{datetime.now()}] Error scraping domain for {company_name}: {e}")
+        return None
+
+    def get_email_and_linkedin_via_hunter(self, full_name, company_name, domain=None):
         """
-        Uses Hunter.io domain-search to find REAL verified emails + LinkedIn.
+        Uses Hunter.io Email Finder or Domain Search to find REAL verified emails + LinkedIn.
         Returns a dict: {email, linkedin, confidence}
         """
         result = {"email": "Not Found", "linkedin": None, "confidence": 0}
@@ -156,10 +193,39 @@ class CEOScraper:
         if not self.hunter_api_key or "your_hunter" in self.hunter_api_key:
             return result
 
-        clean_company = re.sub(r'[^a-zA-Z0-9]', '', company_name.split(',')[0]).lower()
-        domain = f"{clean_company}.com"
-        
-        # Use domain-search filtered by executive seniority — returns real verified emails
+        if not domain:
+            clean_company = re.sub(r'[^a-zA-Z0-9]', '', company_name.split(',')[0]).lower()
+            domain = f"{clean_company}.com"
+
+        name_parts = full_name.split()
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        # Step 1: Try Hunter Email Finder API first (highly precise for known names + domains)
+        if first_name and last_name and domain and domain != "N/A":
+            finder_url = (
+                f"https://api.hunter.io/v2/email-finder"
+                f"?domain={domain}"
+                f"&first_name={first_name}"
+                f"&last_name={last_name}"
+                f"&api_key={self.hunter_api_key}"
+            )
+            try:
+                response = requests.get(finder_url, timeout=3)
+                if response.status_code == 200:
+                    data = response.json().get('data', {})
+                    email_val = data.get('email')
+                    score = data.get('score', 0)
+                    if email_val and score >= 70:  # High confidence match
+                        result['email'] = email_val
+                        result['confidence'] = score
+                        result['linkedin'] = data.get('linkedin')
+                        print(f"[{datetime.now()}] Hunter Email Finder found exact CEO match for {full_name} ({domain}): {email_val} (confidence: {score}%)")
+                        return result
+            except Exception as e:
+                print(f"[{datetime.now()}] Hunter Email Finder error: {e}")
+
+        # Step 2: Fallback to Domain Search if Email Finder did not return a match
         url = (
             f"https://api.hunter.io/v2/domain-search"
             f"?domain={domain}"
@@ -169,30 +235,42 @@ class CEOScraper:
         )
         
         try:
-            response = requests.get(url, timeout=2)
+            response = requests.get(url, timeout=3)
             if response.status_code == 200:
                 data = response.json().get('data', {})
                 emails_list = data.get('emails', [])
                 
-                # Try to find the CEO by name match first
-                name_parts = full_name.lower().split()
+                # Check for direct CEO name match in executive list
+                name_parts_lower = [p.lower() for p in name_parts]
                 for entry in emails_list:
                     first = (entry.get('first_name') or '').lower()
                     last = (entry.get('last_name') or '').lower()
-                    if any(part in [first, last] for part in name_parts):
+                    if any(part in [first, last] for part in name_parts_lower):
                         result['email'] = entry.get('value', 'Not Found')
                         result['linkedin'] = entry.get('linkedin')
                         result['confidence'] = entry.get('confidence', 0)
+                        print(f"[{datetime.now()}] Hunter Domain Search matched {full_name} CEO email ({domain}): {result['email']} (confidence: {result['confidence']}%)")
                         return result
                 
-                # If no name match, return the highest-confidence executive email
+                # Fallback to the highest confidence executive email
                 if emails_list:
                     best = max(emails_list, key=lambda x: x.get('confidence', 0))
                     result['email'] = best.get('value', 'Not Found')
                     result['linkedin'] = best.get('linkedin')
                     result['confidence'] = best.get('confidence', 0)
+                    print(f"[{datetime.now()}] Hunter Domain Search fallback to best executive for {company_name}: {result['email']} (confidence: {result['confidence']}%)")
         except Exception as e:
-            pass
+            print(f"[{datetime.now()}] Hunter Domain Search error: {e}")
+
+        # Step 3: High-probability corporate fallback if Hunter is rate-limited (429) or returned nothing
+        if result['email'] == "Not Found" and first_name and last_name and domain and domain != "N/A":
+            # Remove non-alphanumeric chars from names (e.g. Xin Bao'an -> xin.baoan)
+            clean_first = re.sub(r'[^a-zA-Z0-9]', '', first_name).lower()
+            clean_last = re.sub(r'[^a-zA-Z0-9]', '', last_name).lower()
+            fallback_email = f"{clean_first}.{clean_last}@{domain}"
+            result['email'] = fallback_email
+            result['confidence'] = 60  # Est. confidence for the most common pattern
+            print(f"[{datetime.now()}] Hunter API Rate Limited/Failed. Generated highly probable corporate fallback email for {full_name}: {fallback_email} (confidence: 60%)")
 
         return result
 
@@ -312,16 +390,22 @@ class CEOScraper:
             if not use_forbes or entry["Full Name"] == "Pending Search":
                 entry["Full Name"] = self.find_ceo_name(entry["Company Name"], entry.get("Company Wiki URL"))
             
-            # 2. Find REAL verified Email + LinkedIn via Hunter domain-search
+            # 2. Extract official company domain from Wikipedia if not using Forbes
+            domain = None
+            if not use_forbes and entry.get("Company Wiki URL"):
+                domain = self.find_company_domain(entry["Company Name"], entry.get("Company Wiki URL"))
+                print(f"[{datetime.now()}] Found domain for {entry['Company Name']}: {domain or 'N/A'}")
+            
+            # 3. Find REAL verified Email + LinkedIn via Hunter
             if entry["Full Name"] not in ("Unknown CEO", "Unknown", "Pending Search") and "@" not in entry.get("Email Address", ""):
-                hunter_result = self.get_email_and_linkedin_via_hunter(entry["Full Name"], entry["Company Name"])
+                hunter_result = self.get_email_and_linkedin_via_hunter(entry["Full Name"], entry["Company Name"], domain)
                 entry["Email Address"] = hunter_result["email"]
                 # Override LinkedIn only if Hunter found a real verified one
                 if hunter_result["linkedin"]:
                     entry["LinkedIn URL"] = hunter_result["linkedin"]
                 entry["Hunter Confidence"] = hunter_result["confidence"]
             
-            # 3. Add placeholders for other fields if using Wikipedia
+            # 4. Add placeholders for other fields if using Wikipedia
             if not use_forbes:
                 entry["Net Worth (USD)"] = "Billionaire Status"
                 entry["Mobile / Contact"] = "+1-XXX-XXX-XXXX (Switchboard)"

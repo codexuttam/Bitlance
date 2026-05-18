@@ -8,7 +8,7 @@ def main():
 
     # 1. Initialize Scraper and Run Pipeline
     scraper = CEOScraper()
-    df = scraper.run_full_pipeline(limit=100, use_forbes=True)
+    df = scraper.run_full_pipeline(limit=100, use_forbes=False)
     
     if df.empty:
         print("❌ Data extraction failed.")
