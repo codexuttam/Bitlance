@@ -86,7 +86,7 @@ def get_auto_reply(sender_email, sender_name):
         print(f"Error building auto-reply: {e}")
         return f"Hi {sender_name},\n\nThank you for your reply. I will get back to you soon."
 
-def send_auto_reply(to_email, to_name, original_subject):
+def send_auto_reply(to_email, to_name, original_subject, message_id=None):
     body = get_auto_reply(to_email, to_name)
     
     from_email = EMAIL_USER
@@ -96,7 +96,17 @@ def send_auto_reply(to_email, to_name, original_subject):
     msg = MIMEMultipart("alternative")
     msg['From'] = f"{from_name} <{from_email}>"
     msg['To'] = f"{to_name} <{to_email}>"
-    msg['Subject'] = f"Re: {original_subject}"
+    
+    # Strip duplicate "Re:" if already exists
+    subject_clean = original_subject
+    if subject_clean and not subject_clean.strip().lower().startswith("re:"):
+        subject_clean = f"Re: {subject_clean}"
+    msg['Subject'] = subject_clean
+    
+    # Add Threading Headers to keep in the previous chat thread
+    if message_id:
+        msg['In-Reply-To'] = message_id
+        msg['References'] = message_id
     
     # Plain text and HTML versions
     text_part = MIMEText(body, "plain")
@@ -210,8 +220,11 @@ def listen_inbox():
                 
                 print(f"[{datetime.now()}] Detected reply from {sender_name} <{sender_email}>: {subject}")
                 
+                # Extract Message-ID to thread the auto-reply inside the same conversation
+                message_id = msg.get("Message-ID")
+                
                 # Send auto-reply
-                send_auto_reply(sender_email, sender_name, subject)
+                send_auto_reply(sender_email, sender_name, subject, message_id)
                 
                 seen_ids.add(num)
                 
